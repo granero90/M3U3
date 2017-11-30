@@ -1,0 +1,346 @@
+---
+title: "M3_MachineLearning"
+author: "Alberto Granero García"
+date: "30 de noviembre de 2017"
+output:   
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+### 1.PREPARACIÓN DEL ENTORNO
+
+#### Comprobamos el directorio actual
+```
+getwd()
+```
+#### Verificamos si existe el directorio deseado, si no lo generamos
+```
+if(!file.exists("C:/Tarea/Modulo3")){
+  dir.create("C:/Tarea/Modulo3")
+}
+```
+#### Establecemos el directorio deseado
+```
+setwd("C:/Tarea/Modulo3")
+```
+#### Nos cercioramos de su limpieza así como de encontrarnos en el directorio deseado
+```
+rm(list=ls())
+getwd()
+```
+#### Creamos el espacio de datos
+```
+if(!file.exists("./datos")){
+  dir.create("./datos")
+}
+```
+#### Instalamos los paquetes deseados si fuesen necesarios
+```
+if (! "arules" %in% installed.packages()) {
+  install.packages("arules", dependencies = TRUE)
+}
+if (! "arulesViz" %in% installed.packages()) {
+  install.packages("arulesViz", dependencies = TRUE)
+}
+if (! "dplyr" %in% installed.packages()) {
+  install.packages("dplyr", dependencies = TRUE)
+}
+if (! "dummies" %in% installed.packages()) {
+  install.packages("dummies", dependencies = TRUE)
+}
+if (! "rpart" %in% installed.packages()) {
+  install.packages("rpart", dependencies = TRUE)
+}
+if (! "e1071" %in% installed.packages()) {
+  install.packages("e1071", dependencies = TRUE)
+}
+if (! "randomForest" %in% installed.packages()) {
+  install.packages("randomForest", dependencies = TRUE)
+}
+```
+
+### 2.CARGAR LAS TABLAS
+
+#### Se puede consultar la info de la tablas en:  https://archive.ics.uci.edu/ml/datasets/student+performance
+```
+estudiantes_mates<-read.table("./datos/student-mat.csv",sep=";",header=TRUE)
+estudiantes_portugues<-read.table("./datos/student-mat.csv",sep=";",header=TRUE)
+```
+#### Se unen las tablas mediante merge 
+```
+estudiantes<-merge(estudiantes_mates,estudiantes_portugues,by=c("school","sex","age","address","famsize","Pstatus","Medu","Fedu","Mjob","Fjob","reason","nursery","internet"))
+```
+#### Observamos que se ha unido bien
+```
+head(estudiantes_mates)
+```
+
+### 3.ESTADÍSTICA DESCRIPTIVA
+
+#### Vemos la dimensión del dataframe
+```
+dim(estudiantes)
+```
+#### Los campos
+```
+names(estudiantes)
+```
+#### Los que tienen una 'x' son los referentes a las matemáticas y los de la 'y' al portugués
+```
+head(estudiantes)
+tail(estudiantes)
+```
+#### Comprobamos si existen na
+```
+any(is.na.data.frame(estudiantes)) 
+```
+#### No existe ninguna 'NA'
+
+#### Observo datos de las notas de matemáticas y portugués
+#### Nota final en matemáticas
+```
+summary(estudiantes$G3.x)
+```
+#### Nota final en portugués
+```
+summary(estudiantes$G3.y)
+```
+#### Observo si tiene relación la nota con la edad de matemáticas y portugués con el sexo
+```
+boxplot(estudiantes$G3.x ~ estudiantes$sex, col=(c('mistyrose',"cadetblue1")), main="Nota final Matemáticas",
+        xlab="Mujer (F) u Hombre (F)", ylab="Nota final (de 0 a 20)" ) 
+```
+#### Mejor los hombres en matemáticas
+```
+boxplot(estudiantes$G3.y ~ estudiantes$sex, col=(c('mistyrose',"cadetblue1")),main="Nota final Portugués",
+        xlab="Mujer (F) o Hombre (F)", ylab="Nota final (de 0 a 20)")
+```
+#### Mejor las mujeres en portugués
+
+#### Observo si existe relación entre las notas de matemáticas e inglés entre los estudiantes
+```
+cor.test(estudiantes$G3.x, estudiantes$G3.y) 
+```
+#### Gran correlación 
+#### Igualmente observo si existe relación entre las notas del primer trimestre y la nota final
+```
+cor.test(estudiantes$G1.x, estudiantes$G3.x) 
+```
+#### Gran correlación
+#### Se entiende que tanto G1 como G2 son variables tipo clase también, por lo que no se utilizarán para predecir G3 los modelos supervisados
+
+### ANÁLISIS EXPLORATORIO NO SUPERVISADO
+
+### ----------------------------------
+#### Reglas de asociación: A PRIORI
+### -----------------------------------
+
+#### Cargo la libreria de a priori
+```
+library(arules)
+library(arulesViz)
+```
+#### Miro las clases de los elementos
+
+#### Cargo dplyr para seleccionar solo las columnas factor y crear una nueva dataframe
+```
+library(dplyr)
+estudiantes_apriori <- select_if(estudiantes, is.factor)
+names(estudiantes_apriori)
+```
+#### Elimino las variables que son prácticamente identicas para obtener reglas más relevantes
+```
+table(estudiantes_apriori$guardian.x, estudiantes_apriori$guardian.y)
+table(estudiantes_apriori$schoolsup.x, estudiantes_apriori$schoolsup.y)
+table(estudiantes_apriori$famsup.x, estudiantes_apriori$famsup.y)
+table(estudiantes_apriori$activities.x, estudiantes_apriori$activities.y)
+table(estudiantes_apriori$higher.x, estudiantes_apriori$higher.y)
+table(estudiantes_apriori$romantic.x, estudiantes_apriori$romantic.y)
+```
+#### En esta no existe una gran correlación por lo que dejo las dos
+```
+table(estudiantes_apriori$paid.x, estudiantes_apriori$paid.y)
+```
+#### Elimino las columnas y para dichas variables
+```
+which(colnames(estudiantes_apriori) == 'guardian.y')
+which(colnames(estudiantes_apriori) == 'paid.y') 
+```
+#### Es la 21 por lo que esa no la elimino
+```
+estudiantes_apriori<-estudiantes_apriori[,-c(18:20,22:24)]
+names(estudiantes_apriori) 
+```
+#### Compruebo las columnas
+```
+reglas <- apriori(estudiantes_apriori, parameter = list(supp = 0.3, conf = 0.93))
+```
+#### Confianza del 92% y soporte del 30%
+#### visualizo las reglas
+```
+summary(reglas)
+inspect(sort(reglas, by = 'lift')[1:20])
+```
+#### Debido a que se muestra la variable, que quieren estudiar la educación superior, procedo analizar dicha variable
+```
+summary(estudiantes_apriori$higher.x) 
+```
+#### Debido a que salío que el 5% no quieren estudiar superior elimino dicha variable
+```
+which(colnames(estudiantes_apriori) == 'higher.x')
+estudiantes_apriori<-estudiantes_apriori[,-16]
+```
+#### Vuelvo a generar reglas    
+#### Ese mismo proceso lo repito para: 'school', 'paid.y' 
+#### Visualizo las reglas finales
+#### Visualizo las reglas
+```
+reglas <- apriori(estudiantes_apriori, parameter = list(supp = 0.3, conf = 0.93)) 
+```
+#### Confianza del 92% y soporte del 30%
+```
+summary(reglas)
+inspect(sort(reglas, by = 'lift'))
+```
+#### En este caso las reglas podrán ayudar a predecir:
+#### Segmentos de alumnos que tienen internet en casa, o los que tienen los padres juntos
+#### Esto podrá ser así por ejemplo para campañas de marketing (p.ej: oferta de migración de compañia de internet o parquetes vacacionales en familia)
+
+### ANÁLISIS SUPERVISADO     
+
+#### Voy a tratar de predecir la variable de la nota de matemÃ¡ticas, para eso me voy a basar en dataset 'estudiantes_mates'
+```
+names(estudiantes_mates)
+summary(estudiantes_mates)
+lapply(estudiantes_mates, class)
+```
+#### Voy a transformar las variables school y sexo para convertirlas en numericas para eso cargo la librería dummies
+```
+library(dummies)
+```
+#### Sexo
+```
+df_sexo<-as.data.frame(dummy(estudiantes_mates$sex))
+```
+#### Familia
+```
+df_famsize<-as.data.frame(dummy(estudiantes_mates$famsize))
+```
+#### Unifico las tres tablas
+```
+estudiantes_mates<-cbind(estudiantes_mates, df_sexo, df_famsize)
+names(estudiantes_mates)
+```
+#### Renombro las columnas nuevas creadas
+```
+names(estudiantes_mates)[34]<-'sex_F'
+names(estudiantes_mates)[35]<-'sex_M'
+names(estudiantes_mates)[36]<-'famsize_GT3'
+names(estudiantes_mates)[37]<-'famsize_LE3'
+```
+#### Me quedo solo con las numéricas
+```
+estudiantes_mates <- select_if(estudiantes_mates, is.numeric)
+``` 
+#### Elimino las variables g1, g2 al estar altamente correlacionadas con g3
+```
+which(colnames(estudiantes_mates) == 'G1')
+estudiantes_mates<-estudiantes_mates[,-c(14:15)]
+```
+#### Transformo la variable g3 para convertirla en nominal
+#### Si es menor que 10 --> 0: suspenso, si es mayor o igual: 1 --> aprobado 
+```
+estudiantes_mates$G3<-ifelse(estudiantes_mates$G3 < 10,0,1)
+estudiantes_mates$G3<- as.factor(estudiantes_mates$G3)
+nrow(estudiantes_mates)
+```
+#### Las 350 primeras filas para clasificación y las 45 siguientes para entrenamiento
+```
+mates_train<-estudiantes_mates[1:350,]
+mates_eval<-estudiantes_mates[351:385,]
+```  
+
+### ----------------------------------
+#### Clasificador de Bayes Ingenuo ### 
+### -----------------------------------
+```
+library(e1071)
+```
+#### Clasificador
+```
+clasificadorNB<-naiveBayes(G3 ~ ., data=mates_train)
+```
+#### Compruebo ahora
+```
+nota<-mates_eval[,14]
+predictedNB<-predict(clasificadorNB, mates_eval[,-14])
+matrizconfNB<-table(predictedNB, nota)
+matrizconfNB
+sum(diag(matrizconfNB))/sum(matrizconfNB)
+```
+## Tiene una veracidad del 77% (TP)
+#### Ver las probabilidades calculadas por NaiveBayes
+```
+print(clasificadorNB)
+```
+
+### -------------------------------
+#### Árbol de regresión CART ### 
+### ------------------------------- 
+```
+library(rpart)
+```
+#### Semilla
+```
+set.seed(1234)
+```
+#### Modelo y comprobación
+```
+clasif_cart<-rpart(G3 ~ ., data=mates_train, minsplit = 35)
+predicted_cart<-predict(clasif_cart, mates_eval[,-14], type='class')
+matrizconf_cart<-table(predicted_cart, nota)
+matrizconf_cart
+sum(diag(matrizconf_cart))/sum(matrizconf_cart) 
+```
+## Veracidad de 65% según la matriz de confunsión (TP)
+####  Ver las reglas generadas
+```
+print(clasif_cart)
+```
+####  Gráfico del arbol
+```
+plot(clasif_cart)
+text(clasif_cart, use.n = T)
+```
+      
+### --------------------
+#### Ramdom Forest ### 
+### --------------------
+```
+if(! "randomForest" %in% installed.packages()) install.packages("randomForest", depend = TRUE)
+library(randomForest)
+rf.model <- randomForest(G3 ~ ., data=mates_train, ntree=200, proximity=TRUE)
+```
+#### Resultados
+```
+predicted_rf<-predict(rf.model, mates_eval[,-14], type='class')
+matrizconf_rf<-table(predicted_rf, nota)
+matrizconf_rf
+sum(diag(matrizconf_rf))/sum(matrizconf_rf) 
+```
+## Veracidad de 68% según la matriz de confunsión (TP)
+#### Veo el modelo
+```
+print(rf.model)
+```
+####  Gráfico del arbol
+```
+plot(rf.model)
+```
